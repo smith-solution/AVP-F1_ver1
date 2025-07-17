@@ -18,7 +18,7 @@ def check_traffic_light(image):
     # 원본이미지를 복제한 후에 특정영역(ROI Area)을 잘라내기
     cimg = image.copy()
     Center_X, Center_Y = 320, 100  # ROI 영역의 중심위치 좌표 
-    XX, YY = 220, 80  # 위 중심 좌표에서 좌우로 XX, 상하로 YY만큼씩 벌려서 ROI 영역을 잘라냄   
+    XX, YY = 110, 55  # 위 중심 좌표에서 좌우로 XX, 상하로 YY만큼씩 벌려서 ROI 영역을 잘라냄   
 
     # ROI 영역에 녹색 사각형으로 테두리를 쳐서 표시함 
     cv2.rectangle(cimg, (Center_X-XX, Center_Y-YY), (Center_X+XX, Center_Y+YY), Green, 2)
@@ -32,8 +32,8 @@ def check_traffic_light(image):
 
     # Hough Circle 함수를 이용해서 이미지에서 원을 (여러개) 찾음 
     circles = cv2.HoughCircles(blur, cv2.HOUGH_GRADIENT, 1, 20,
-                  param1=40, param2=20, 
-                  minRadius=MIN_RADIUS, maxRadius=MAX_RADIUS)
+                  param1=50, param2=30, 
+                  minRadius=5, maxRadius=30)
 
     # 디버깅을 위해서 Canny 처리를 했을때의 모습을 화면에 표시함
     # 위 HoughCircles에서 param1, param2에 사용했던 값을 아래 canny에서 똑같이 적용해야 함. 순서 조심.

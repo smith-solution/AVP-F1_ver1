@@ -24,20 +24,20 @@ import pid
 import stopline
 import trafficlight
 import ultradrive
-
 #=============================================
 # 프로그램에서 사용할 변수, 저장공간 선언부
 #=============================================
 motor = None  # 모터 노드 변수
 Fix_Speed = 12  # 모터 속도 고정 상수값 
 new_angle = 0  # 모터 조향각 초기값
+prev_angle = 0
 new_speed = Fix_Speed  # 모터 속도 초기값
 bridge = CvBridge()  # OpenCV 함수를 사용하기 위한 브릿지 
 ultra_msg = None  # 초음파 데이터를 담을 변수
 image = np.empty(shape=[0])  # 카메라 이미지를 담을 변수
 motor_msg = xycar_motor()  # 모터 토픽 메시지
 WIDTH, HEIGHT = 640, 480  # 카메라 이미지 가로x세로 크기
-View_Center = WIDTH//2  # 화면의 중앙값 = 카메라 위치
+View_Center = WIDTH//2 + 10  # 화면의 중앙값 = 카메라 위치
 ar_msg = {"ID":[],"DX":[],"DZ":[]}  # AR태그 토픽을 담을 변수
 
 #=============================================
@@ -144,7 +144,7 @@ def cam_exposure(value):
 def start():
 
     global motor, ultra_msg, image, angle_avg
-    global new_angle, new_speed
+    global new_angle, new_speed, prev_angle
     retry_count = 0
     View_Center = 320
 
@@ -177,6 +177,7 @@ def start():
     LANE_DRIVE = 5
     PARKING = 6
     FINISH = 7
+    FAST = 8
 
     #===================================
     # 아래 while 블럭중에 
@@ -185,11 +186,14 @@ def start():
     #===================================.
     stop_car(2.0)  # 차량을 멈춥니다. 
     #cv2.destroyAllWindows()  # OpenCV 창을 모두 닫습니다. 
-    drive_mode = STOP_LINE  # 처음 진입할 모드를 선택합니다.
-    cam_exposure(110)  # 카메라의 노출값을 적절하게 변경합니다.
+    drive_mode = LANE_DRIVE  # 처음 진입할 모드를 선택합니다.
+    cam_exposure(105) # 카메라의 노출값을 적절하게 변경합니다.
     print("----- Finding Stopline starts... -----")
     go_next = False  # 다음을 위해 원래대로 False로 바꿉니다.
     count = 0
+
+    # lane change
+    move_flag = 0
 
     #===================================
     # 메인 루프 - Main While Loop
@@ -205,11 +209,11 @@ def start():
             # 잠깐씩 쉬면서 while 루프를 돕니다.
             # 개발단계에서의 편의를 위해 삽입된 코드입니다. 
             # 코드 개발이 끝난후 꼭 필요하지 않으면 삭제하세요.             
-            time.sleep(0.3)
+            # time.sleep(0.3)
 
             # 차량을 똑바로 앞으로 전진시킵니다. 
             new_angle = 0        
-            new_speed = 15
+            new_speed = 7
             drive(new_angle, new_speed)
             
             # 정지선이 있는지 체크합니다.          
@@ -220,6 +224,7 @@ def start():
                 print("#======================================#") 
                 print("#  Found Stopline! -- Go Next!         #") 
                 print("#======================================#") 
+                time.sleep(0.5)
                 go_next = True
 
             #else:
@@ -229,8 +234,9 @@ def start():
             if (go_next == True):                
                 stop_car(2.0)  # 차량을 멈춥니다. 
                 #cv2.destroyAllWindows()  # OpenCV 창을 모두 닫습니다. 
-                drive_mode = TRAFFIC_LIGHT  # 다음 모드로 넘어갑니다.
-                cam_exposure(110)  # 카메라의 노출값을 적절하게 변경합니다.
+                # drive_mode = TRAFFIC_LIGHT  # 다음 모드로 넘어갑니다.
+                drive_mode = TRAFFIC_LIGHT
+                cam_exposure(100)  # 카메라의 노출값을 적절하게 변경합니다.
                 print("----- Traffic Light Checking starts... -----")
                 go_next = False  # 다음을 위해 원래대로 False로 바꿉니다.
                 count = 0
@@ -244,7 +250,7 @@ def start():
             # 잠깐씩 쉬면서 while 루프를 돕니다.
             # 개발단계에서의 편의를 위해 삽입된 코드입니다. 
             # 코드 개발이 끝난후 꼭 필요하지 않으면 삭제하세요.             
-            time.sleep(0.3)
+            # time.sleep(0.3)
 
             # 신호등이 있는지, 있다면 어떤 불이 켜졌는지 체크합니다.  
             flag, color = trafficlight.check_traffic_light(image)
@@ -255,13 +261,15 @@ def start():
                 print("#  Traffic light is Blue! -- Go Next!  #") 
                 print("#======================================#") 
                 go_next = True
+            # time.sleep(3)
+            # go_next = True
             
             # 아래 if 블럭에는 go_next가 True로 변경된 경우에만 들어갈 수 있습니다.
             if (go_next == True):                
                 stop_car(2.0)  # 차량을 멈춥니다.
                 #cv2.destroyAllWindows()  # OpenCV 창을 모두 닫습니다. 
                 drive_mode = SENSOR_DRIVE  # 다음 모드로 넘어갑니다.
-                cam_exposure(110)  # 카메라의 노출값을 적절하게 변경합니다.
+                cam_exposure(100)  # 카메라의 노출값을 적절하게 변경합니다.
                 print ("----- Sensor Driving starts... -----")
                 go_next = False  # 다음을 위해 원래대로 False로 바꿉니다.
                 count = 0
@@ -276,13 +284,13 @@ def start():
             # 잠깐씩 쉬면서 while 루프를 돕니다.
             # 개발단계에서의 편의를 위해 삽입된 코드입니다. 
             # 코드 개발이 끝난후 꼭 필요하지 않으면 삭제하세요.             
-            time.sleep(0.3)
+            # time.sleep(0.1)
             
             # 라바콘 주행을 위한 핸들값을 찾아냅니다.
             new_angle = ultradrive.sonic_drive(ultra_msg, new_angle)  
             
             # 주행 속도값을 세팅합니다. 
-            new_speed = 12
+            new_speed = 8
 
             # 위에서 결정된 핸들값과 속도값을 토픽에 담아 모터로 보냅니다.
             drive(new_angle, new_speed)
@@ -316,7 +324,7 @@ def start():
                 stop_car(2.0)  # 차량을 멈춥니다.
                 #cv2.destroyAllWindows()  # OpenCV 창을 모두 닫습니다. 
                 drive_mode = AR_DRIVE  # 다음 모드로 넘어갑니다.
-                cam_exposure(110)  # 카메라의 노출값을 적절하게 변경합니다.
+                cam_exposure(100)  # 카메라의 노출값을 적절하게 변경합니다.
                 print ("----- AR Driving starts... -----")
                 go_next = False  # 다음을 위해 원래대로 False로 바꿉니다.
                 count = 0
@@ -326,14 +334,17 @@ def start():
         # AR박스가 retry_count 회수만큼 보이지 않으면
         # 다음 순서인 LANE_DRIVE 모드로 넘어갑니다.          
         # ======================================
+        arcnt = 0
+        artim = 0
         while drive_mode == AR_DRIVE:
         
             # 잠깐씩 쉬면서 while 루프를 돕니다.
             # 코드 개발이 끝난후 꼭 필요하지 않으면 삭제하세요.             
-            time.sleep(0.3)
+            # time.sleep(0.3)
                                                 
             # 전방에 AR태그가 보이는지 체크합니다.
             ar_ID, z_pos, x_pos = aprilartag.check_AR(image)
+            artim += 1
                            
             # AR태그 보이면 그쪽으로 주행합니다. 
             if (ar_ID != 99): # AR이 발견된 경우
@@ -348,18 +359,29 @@ def start():
                 distance = math.sqrt(z_pos**2 + x_pos**2)
                 
                 # 거리와 X값을 따져서 핸들값을 적절히 세팅합니다. 
-                if (distance > 100):
+                if (distance > 60): # far
                     x_pos = x_pos + 0
-                    new_angle = x_pos * 1
-                elif (distance > 50):
-                    x_pos = x_pos + 20
-                    new_angle = x_pos * 2
-                else:
-                    x_pos = x_pos + 30
-                    new_angle = x_pos * 3
+                    if x_pos < 0: # AR is left
+                        new_angle = -30
+                    else: # x_pos > 0: # AR is right
+                        new_angle = 30
+                elif (distance > 25):
+                    if x_pos < 50: # AR is so so left
+                        new_angle = -40
+                    else: # x_pos > 50: # AR is too too right
+                        new_angle = 50
+                # else: # so close
+                    if arcnt == 0:
+                        print("STOPSTOPSTOPSTOPSTOPSTOPSTOP")
+                        drive(0,0)
+                        time.sleep(0.7)
+                    # x_pos = x_pos + 30
+                    # new_angle = -(x_pos * 1.7)
+                    # new_angle = -80
+                    arcnt += 1
 
                 # 속도값을 적절하게 세팅합니다.
-                new_speed = 12
+                new_speed = 8
                 
                 # 위에서 결정된 핸들값과 속도값을 토픽에 담아 모터로 보냅니다.
                 drive(new_angle, new_speed)
@@ -367,7 +389,7 @@ def start():
             # AR태그 보이지 않으면 상황판단을 해서 대책을 강구합니다.            
             else:  # AR이 발견되지 않은 경우 
                 retry_count = retry_count + 1
-                if (retry_count == 10):
+                if (retry_count == 15):
                     print("#============================#") 
                     print("#  No more AR! -- Go Next!   #")
                     print("#============================#") 
@@ -375,8 +397,10 @@ def start():
                 else:
                     print(f"AR not found. Searching... {retry_count}")
                     # 조향각과 속도값을 토픽에 담아 모터로 보냅니다.
-                    new_angle = new_angle
-                    new_speed = 0
+                    # new_angle = max(min(new_angle, 50), 50)
+                    # new_angle = 0 if arcnt==0 else (-65 if retry_count < 8 else 80)
+                    new_angle = 0 if arcnt==0 else -artim*1.5
+                    new_speed = 8
                     drive(new_angle, new_speed)
                     time.sleep(0.3)
   
@@ -385,7 +409,7 @@ def start():
                 stop_car(2.0)  # 차량을 멈춥니다.
                 #cv2.destroyAllWindows()  # OpenCV 창을 모두 닫습니다. 
                 drive_mode = LANE_DRIVE  # 다음 모드로 넘어갑니다.
-                cam_exposure(110)  # 카메라의 노출값을 적절하게 변경합니다.
+                cam_exposure(100)  # 카메라의 노출값을 적절하게 변경합니다.
                 print("----- Lane driving starts... -----")
                 go_next = False  # 다음을 위해 원래대로 False로 바꿉니다.
                 count = 0
@@ -400,6 +424,17 @@ def start():
             # 잠깐씩 쉬면서 while 루프를 돕니다.
             # 코드 개발이 끝난후 꼭 필요하지 않으면 삭제하세요.             
             time.sleep(0.3)
+
+            # lane change
+            ar_ID, z_pos, x_pos = aprilartag.check_AR(image)
+            if move_flag == 0 and ar_ID != 99:
+                move_flag = 1
+                for _ in range(7):
+                    drive(-20,14)
+                    time.sleep(0.1)
+                for _ in range(6):
+                    drive(20,10)
+                    time.sleep(0.1)
         
             # 카메라 영상에서 차선의 위치를 알아냅니다.
             found, x_left, x_right = hough.lane_detect(image)
@@ -419,23 +454,78 @@ def start():
                 #=========================================
                 # 핸들값에 PID제어를 적용합니다. 
                 #=========================================
-                new_angle = pid.pid_control(new_angle)                
-                
+                new_angle = pid.pid_control(new_angle)        
+                # 1. 차선 중심 오차 계산
+                offset = x_midpoint - View_Center
+
+                # 2. 곡선 여부 판단
+                is_curve = abs(offset) > 30
+
+                # 3. 직선에서는 오차가 작으면 무시
+                if not is_curve and abs(offset) < 5:
+                    offset = 0.0
+
+                # 4. 변화량 필터 적용 (직선에서만)
+                delta_offset = offset - prev_offset
+                if not is_curve and abs(delta_offset) < 2:
+                    offset = prev_offset
+                prev_offset = offset
+
+                # 5. PID 제어 및 이동 평균 적용
+                new_angle = pid.pid_control(offset)
+                angle_avg.add_sample(new_angle)
+                new_angle = angle_avg.get_mavg()
+                new_angle = max(-50, min(50, new_angle))  # 조향 제한
+
+                # 6. PID 파라미터 및 속도 다단계 조정
+                angle_abs = abs(new_angle)
+                if angle_abs < 10:
+                    pid.Kp = 0.3; pid.Ki = 0.001; pid.Kd = 0.4
+                    target_speed = 20
+                elif angle_abs < 20:
+                    pid.Kp = 0.4; pid.Ki = 0.001; pid.Kd = 0.5
+                    target_speed = 18
+                elif angle_abs < 30:
+                    pid.Kp = 0.6; pid.Ki = 0.001; pid.Kd = 0.5
+                    target_speed = 15
+                elif angle_abs < 45:
+                    pid.Kp = 1.0; pid.Ki = 0.0; pid.Kd = 0.3
+                    target_speed = 12
+                else:
+                    pid.Kp = 1.2; pid.Ki = 0.0; pid.Kd = 0.2
+                    target_speed = 10
+
+                # 7. 속도 보간 적용
+                alpha = 0.3
+                new_speed = alpha * target_speed + (1 - alpha) * new_speed
+
+                # 8. 모터 제어
+                drive(new_angle, new_speed)
+
+                # ### round
+                # if abs(new_angle) > 60 :
+                #     pid.Kp = 1.2
+                #     pid.Kd = 0.2
+                # else : #straight
+                #     pid.Kp = 0.35
+                #     pid.Ki = 0.0001
+                #     pid.Kd = 1.0
+                    
                 #====================================================
                 # 속도값을 적절하게 세팅합니다. 
                 #  * 직진구간에서는 코너보다 빠르게 주행하게 하면 좋습니다.
                 #====================================================
                 if (abs(new_angle) < 20):
-                    new_speed = 18
+                    new_speed = 50
                 elif (abs(new_angle) < 40):
-                    new_speed = 15
+                    new_speed = 40
                 else:  # 40 < new_angle < 100
-                    new_speed = 12
+                    new_speed = 20
                 
                 # 위에서 결정된 핸들값과 속도값을 토픽에 담아 모터로 보냅니다.
                 #print(f"Angle={new_angle:.1f} Speed={new_speed:.1f}")
-                drive(new_angle, new_speed)
-
+                # drive(new_angle if abs(new_angle) > 60 else new_angle*0.5, new_speed)
+                
             # 차선인식이 안됐으면 가던대로 갑니다.
             else:         
                 #print(f"Lane finding fails... Keep going! {count}")
@@ -453,6 +543,17 @@ def start():
                     new_speed = 0
                     drive(new_angle, new_speed)
                     time.sleep(0.1)
+        while drive_mode == FAST:
+            print("DO IT FASTER")
+            drive(0,100)
+            time.sleep(1)
+            drive(0,100)
+            time.sleep(1)
+            drive(0,100)
+            time.sleep(0.5)
+            drive(0,0)
+            print("STOP")
+            drive_mode = FINISH
                 
 #=============================================
 # 메인함수를 호출합니다.

@@ -10,16 +10,39 @@ import math
 #=============================================
 CAM_FPS = 30  # 카메라 FPS 초당 30장의 사진을 보냄
 WIDTH, HEIGHT = 640, 480  # 카메라 이미지 가로x세로 크기
-ROI_START_ROW = 300  # 차선을 찾을 ROI 영역의 시작 Row값
-ROI_END_ROW = 380  # 차선을 찾을 ROT 영역의 끝 Row값
+ROI_START_ROW = 250  # 차선을 찾을 ROI 영역의 시작 Row값
+ROI_END_ROW = 450  # 차선을 찾을 ROT 영역의 끝 Row값
 ROI_HEIGHT = ROI_END_ROW - ROI_START_ROW  # ROI 영역의 세로 크기  
-L_ROW = 40  # 차선의 위치를 찾기 위한 ROI 안에서의 기준 Row값 
+L_ROW = 110  # 차선의 위치를 찾기 위한 ROI 안에서의 기준 Row값 
 prev_x_left, prev_x_right = 100, 540
-View_Center = WIDTH//2  # 화면의 중앙값 = 카메라 위치
+View_Center = 320   # 화면의 중앙값 = 카메라 위치
 Blue =  (255,0,0) # 파란색
 Green = (0,255,0) # 녹색
 Red =   (0,0,255) # 빨간색
 Yellow = (0,255,255) # 노란색
+
+def apply_trapezoid_mask(img):
+    mask = np.zeros_like(img)
+    height, width = img.shape[:2]
+
+    # 사다리꼴 모양의 좌표 정의
+    trapezoid = np.array([
+
+        [width * 2//6, height * 1//6],
+        [width * 4//6, height * 1//6],
+        [width,        height * 5//6],
+        [0,            height * 5//6]
+
+    ], np.int32)
+
+    # 사다리꼴 모양으로 마스크 이미지 채우기
+    cv2.fillPoly(mask, [trapezoid], 255)
+
+    cv2.imshow("Mask", mask)
+    
+    # 마스크를 사용하여 이미지 자르기
+    masked_img = cv2.bitwise_and(img, mask)
+    return masked_img
 
 #=============================================
 # 카메라 이미지에서 차선을 찾아 그 위치를 반환하는 함수
@@ -38,15 +61,15 @@ def lane_detect(img):
     # 원본 칼라이미지를 그레이 회색톤 이미지로 변환하고 
     # 블러링 처리를 통해 노이즈를 제거한 후에 (약간 뿌옇게, 부드럽게)
     # Canny 변환을 통해 외곽선 이미지로 만들기
-    #=========================================
+    #=========================================cd x
     gray = cv2.cvtColor(roi_img, cv2.COLOR_BGR2GRAY)
     blur_gray = cv2.GaussianBlur(gray,(5, 5), 0)
-    edge_img = cv2.Canny(np.uint8(blur_gray), 60, 75)
+    edge_img = cv2.Canny(np.uint8(blur_gray), 50, 150)
 
     cv2.imshow("Lane Detection Canny Image", edge_img)
 
 
-    '''
+   
     #=========================================
     #  사다리꼴 모양으로 이미지 자르기
     #=========================================
@@ -57,14 +80,13 @@ def lane_detect(img):
     #=========================================
     #  팽창 연산으로 선을 굵게 만들기
     #=========================================
-    kernel = np.ones((5, 5), np.uint8)
-    edge_img = cv2.dilate(edge_img, kernel, iterations=1)
-    cv2.imshow("Dilated Canny Image", edge_img)
-    '''
-	
+    # kernel = np.ones((5, 5), np.uint8)
+    # edge_img = cv2.dilate(edge_img, kernel, iterations=1)
+    # cv2.imshow("Dilated Canny Image", edge_img)
+   
 
     # 잘라낸 이미지에서 HoughLinesP 함수를 사용하여 선분들을 찾음
-    all_lines = cv2.HoughLinesP(edge_img, 1, math.pi/180,50,50,20)
+    all_lines = cv2.HoughLinesP(edge_img, 1, math.pi/180,30,10,10)
     
     if all_lines is None:
         cv2.imshow("Lanes positions", display_img)
@@ -159,7 +181,7 @@ def lane_detect(img):
             
         x_avg = x_sum / (size*2)
         y_avg = y_sum / (size*2)
-        m_left = m_sum / size
+        m_left = m_sum / size 
         b_left = y_avg - m_left * x_avg
 
         if m_left != 0.0:
@@ -275,13 +297,12 @@ def lane_detect(img):
     #==================================================
     TOLERANCE = 200  # 허용 범위 설정 (예: 200픽셀)
     
-    '''		     
-    if abs(x_left - prev_x_left) > TOLERANCE:
-        x_left = prev_x_left
+    		     
+    # if abs(x_left - prev_x_left) > TOLERANCE:
+    #     x_left = prev_x_left
 
-    if abs(x_right - prev_x_right) > TOLERANCE:
-        x_right = prev_x_right
-    '''
+    # if abs(x_right - prev_x_right) > TOLERANCE:
+    #     x_right = prev_x_right
 
     #==================================================
     # 이번에 구한 값으로 예전 값을 업데이트 함			
@@ -310,6 +331,23 @@ def lane_detect(img):
     display_img[ROI_START_ROW:ROI_END_ROW, 0:WIDTH] = line_draw_img
     cv2.imshow("Lanes positions", display_img)
     cv2.waitKey(1)
+
+    mid_roi = edge_img[int(ROI_START_ROW):int(ROI_END_ROW), int(WIDTH/2 - 50) :int(WIDTH/2 +50)]
+    mid_lines = cv2.HoughLinesP(mid_roi,1,np.pi/180, 20, minLineLength=15, maxLineGap=30)
+
+    mid_points = []
+    if mid_lines is not None:
+        for line in mid_lines:
+            x1, y1, x2, y2 = line[0]
+            x_mid_local = (x1 + x2) // 2
+            x_mid_global = x_mid_local + int(WIDTH//2 - 50)
+            mid_points.append(x_mid_global)
+
+    if len(mid_points) > 0:
+        x_center_line = int(np.mean(mid_points))
+        use_center_lint = True
+    else:
+        use_center_line = False
 
     return True, x_left, x_right
 
